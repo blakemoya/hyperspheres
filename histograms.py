@@ -7,6 +7,10 @@ import matplotlib.animation
 import seaborn as sns
 import pandas as pd
 
+"""
+change density coloring to calculate the average distance form six nearest neighbors
+"""
+
 
 def hypersphere_sample(npoints, ndim=128):
     vec = np.random.uniform(low=-1, high=1, size=(npoints, ndim))
@@ -20,8 +24,8 @@ def hypersphere_sample_2(npoints, ndim=128):
     for i in range(npoints):
         sum = 0
         vec[i][0] = np.random.uniform(low=-1, high=1)
-        sum += vec[i][0]**2
-        for j in range(1, ndim-1):
+        sum += vec[i][0] ** 2
+        for j in range(1, ndim - 1):
             vec[i][j] = np.random.uniform(low=-1 + sum, high=1 - sum)
             sum += vec[i][j] ** 2
         if bool(random.getrandbits(1)):
@@ -44,6 +48,54 @@ def random_sphere_test(vec):
     plt.show()
 
 
+def density_by_voxel(points, frac, ax, cmap, alpha):
+    points['density'] = np.zeros(len(points.index))
+    interval = 1 / (frac / 2)
+    sum = 0
+    for i in range(frac):
+        ini = points.ix[((i * interval) - 1 <= points[0]) & (points[0] <= (i * interval + interval) - 1)]
+        for j in range(frac):
+            inj = ini.ix[((j * interval) - 1 <= ini[1]) & (ini[1] <= (j * interval + interval) - 1)]
+            for k in range(frac):
+                ink = inj.ix[((k * interval) - 1 <= inj[2]) & (inj[2] <= (k * interval + interval) - 1)]
+                # density[i, j, k] = len(ink)
+                for idx in ink.index:
+                    points.loc[idx, 'density'] = len(ink)
+                sum += len(ink)
+    assert (sum == len(points.index))
+
+    return ax.scatter(points[0], points[1], points[2], marker=",", s=1, c=points['density'], cmap=cmap,
+                      alpha=alpha)
+
+
+def density_by_neighbor(points, neighbors=6):
+    ilen = len(points.index)
+    clen = len(points.columns)
+    n = neighbors / 2
+    points['density'] = np.zeros(ilen)
+    # Convert frame into muli level index list and choose three point sbefore and after point of interest
+    # assign density value as avg distance from these points.
+    # for loop. each iteration, sort by an axis and measure average distance from nearest six points on that axis
+    for i in range(clen - 1):
+        points.sort_values([i], inplace=True)
+        points.reset_index(drop=True, inplace=True)
+        for index, row in points.iterrows():
+            if ilen - n <= index:
+                diff = index - (ilen - n - 1)
+                print(points.loc[(index - (n + diff)):(ilen - 1)])
+            elif index < n:
+                diff = n - index
+                print(points.loc[0:(index + n + diff)])
+            else:
+                print(type(points.loc[(index - n):(index + n - 1)]))
+
+
+def average_distance(df, index):
+    # drop density column?
+    # return average distance form every row in df to index row
+    return 0
+
+
 def sphere_display(npoints, ndim=3, animate=True, abs_color=True, density_color=False, frac=8, cmap='cool', alpha=1.0,
                    savepath=''):
     points = pd.DataFrame(hypersphere_sample_2(npoints, ndim))
@@ -62,23 +114,7 @@ def sphere_display(npoints, ndim=3, animate=True, abs_color=True, density_color=
     if density_color:
         # fencepost makes it possible to count some points twice,  hence assert for sum being equal to points
         # should add warning that for >3 dimensions, density is only measuring density per voxel of casted space
-        points['density'] = np.zeros(len(points.index))
-        interval = 1 / (frac / 2)
-        sum = 0
-        for i in range(frac):
-            ini = points.ix[((i * interval) - 1 <= points[0]) & (points[0] <= (i * interval + interval) - 1)]
-            for j in range(frac):
-                inj = ini.ix[((j * interval) - 1 <= ini[1]) & (ini[1] <= (j * interval + interval) - 1)]
-                for k in range(frac):
-                    ink = inj.ix[((k * interval) - 1 <= inj[2]) & (inj[2] <= (k * interval + interval) - 1)]
-                    # density[i, j, k] = len(ink)
-                    for idx in ink.index:
-                        points.loc[idx, 'density'] = len(ink)
-                    sum += len(ink)
-        assert (sum == len(points.index))
-
-        graph = ax.scatter(points[0], points[1], points[2], marker=",", s=1, c=points['density'], cmap=cmap,
-                           alpha=alpha)
+        graph = density_by_voxel(points, frac, ax, cmap, alpha)
 
     else:
         if abs_color:
@@ -145,4 +181,7 @@ def n_sphere_dataframe(highsphere, npoints):
 
 
 if __name__ == "__main__":
-        sphere_display(3000, 4)
+    num = 100
+    dim = 3
+    points = pd.DataFrame(hypersphere_sample(num, dim))
+    density_by_neighbor(points)

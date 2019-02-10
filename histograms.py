@@ -1,4 +1,5 @@
 import math
+from functools import reduce
 import random
 import numpy as np
 import matplotlib.pyplot as plt
@@ -6,10 +7,6 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.animation
 import seaborn as sns
 import pandas as pd
-
-"""
-change density coloring to calculate the average distance form six nearest neighbors
-"""
 
 
 def hypersphere_sample(npoints, ndim=128):
@@ -68,37 +65,68 @@ def density_by_voxel(points, frac, ax, cmap, alpha):
                       alpha=alpha)
 
 
-def density_by_neighbor(points, neighbors=6):
+def density_by_neighbor_2(points, ax, cmap, alpha, neighbors=3):
+    # if this works as expected, should only measure neighbors in hyperspace, not within manifold
     ilen = len(points.index)
     clen = len(points.columns)
-    n = neighbors / 2
     points['density'] = np.zeros(ilen)
-    # Convert frame into muli level index list and choose three point sbefore and after point of interest
-    # assign density value as avg distance from these points.
-    # for loop. each iteration, sort by an axis and measure average distance from nearest six points on that axis
-    for i in range(clen - 1):
-        points.sort_values([i], inplace=True)
-        points.reset_index(drop=True, inplace=True)
+    n_array = np.zeros((ilen, clen, ilen))
+
+    for i in range(clen):
+        p = points.copy()
         for index, row in points.iterrows():
-            if ilen - n <= index:
-                diff = index - (ilen - n - 1)
-                print(points.loc[(index - (n + diff)):(ilen - 1)])
-            elif index < n:
-                diff = n - index
-                print(points.loc[0:(index + n + diff)])
-            else:
-                print(type(points.loc[(index - n):(index + n - 1)]))
+            p[i] = (p[i] - row[i]) ** 2
+            p.sort_values([i], inplace=True)
+            n_array[index][i] = p.index[:].values
+
+            if i == clen - 1:
+                nearest = rolling_intersection(n_array[index], ilen, clen, neighbors)
+                row['density'] = math.log10(average_distance(points.iloc[nearest], index))
+
+            p = points.copy()
+
+    # perhaps change this to return 'points' and run this method with 100 row slices of the original df... speed up?
+    # also change it to plot a random three axes
+    return ax.scatter(points[0], points[1], points[2], marker=",", s=1, c=points['density'], cmap=cmap,
+                      alpha=alpha)
 
 
-def average_distance(df, index):
-    # drop density column?
-    # return average distance form every row in df to index row
-    return 0
+def rolling_intersection(arr, ilen, clen, neighbors):
+    for i in range(ilen):
+        if i > neighbors:
+            seq = []
+            for dim in range(clen):
+                seq.append(arr[dim][0:i])
+            intersection = reduce(np.intersect1d, seq)
+            if len(intersection) > neighbors:
+                return intersection
+
+
+def average_distance(points, index):
+    df = points.drop(columns=['density'])
+    list_of_sums = []
+    for idx, row in df.iterrows():
+        sum = 0
+        if idx != index:
+            source = df.loc[index]
+            for axis in range(len(df.columns)):
+                sum += (source[axis] - row[axis]) ** 2
+            list_of_sums.append(sum)
+    avg = 0
+    for item in list_of_sums:
+        avg += math.sqrt(item)
+    try:
+        avg /= len(list_of_sums)
+    except ZeroDivisionError:
+        print('Found an empty df in average_distance')
+        avg = 1.75
+    return avg
 
 
 def sphere_display(npoints, ndim=3, animate=True, abs_color=True, density_color=False, frac=8, cmap='cool', alpha=1.0,
                    savepath=''):
-    points = pd.DataFrame(hypersphere_sample_2(npoints, ndim))
+    points = pd.DataFrame(hypersphere_sample(npoints, ndim))
+    # points = pd.DataFrame(hypersphere_sample_2(npoints, ndim))
     assert (len(points.columns) >= 3)
     plt.style.use('dark_background')
     fig = plt.figure()
@@ -114,7 +142,8 @@ def sphere_display(npoints, ndim=3, animate=True, abs_color=True, density_color=
     if density_color:
         # fencepost makes it possible to count some points twice,  hence assert for sum being equal to points
         # should add warning that for >3 dimensions, density is only measuring density per voxel of casted space
-        graph = density_by_voxel(points, frac, ax, cmap, alpha)
+        graph = density_by_neighbor_2(points, ax, cmap, alpha)
+        # graph = density_by_voxel(points, frac, ax, cmap, alpha)
 
     else:
         if abs_color:
@@ -162,26 +191,7 @@ def random_circle_test(vec, draw_points=False):
     plt.show()
 
 
-def n_sphere_dataframe(highsphere, npoints):
-    df = pd.DataFrame()
-    for i in range(2, highsphere + 1):
-        vec = np.random.randn(npoints, i)
-        vec /= np.linalg.norm(vec, axis=0)
-        nans = np.zeros((npoints, highsphere - i))
-        # nans[:] = np.nan
-        vec = np.append(vec, nans, axis=1)
-        helper = pd.DataFrame(data=vec)
-        df = df.append(helper, ignore_index=True)
-    names = []
-    for i in range(2, highsphere + 2):
-        for j in range(0, npoints):
-            names.append(str(i))
-    df['Dimensions'] = pd.Series(data=names)
-    return df
-
-
 if __name__ == "__main__":
-    num = 100
+    num = 1000
     dim = 3
-    points = pd.DataFrame(hypersphere_sample(num, dim))
-    density_by_neighbor(points)
+    sphere_display(num, dim, density_color=True, cmap='binary')

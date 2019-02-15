@@ -1,4 +1,5 @@
 import math
+import time
 from functools import reduce
 import random
 import numpy as np
@@ -65,8 +66,8 @@ def density_by_voxel(points, frac, ax, cmap, alpha):
                       alpha=alpha)
 
 
-def density_by_neighbor_2(points, ax, cmap, alpha, neighbors=3):
-    # if this works as expected, should only measure neighbors in hyperspace, not within manifold
+def density_by_neighbor_2(points, ax, cmap, alpha, neighbors=6):
+    # this is bad, would be better to make distance matrices for 100 point blocks and copy those distances into the df
     ilen = len(points.index)
     clen = len(points.columns)
     points['density'] = np.zeros(ilen)
@@ -81,7 +82,7 @@ def density_by_neighbor_2(points, ax, cmap, alpha, neighbors=3):
 
             if i == clen - 1:
                 nearest = rolling_intersection(n_array[index], ilen, clen, neighbors)
-                row['density'] = math.log10(average_distance(points.iloc[nearest], index))
+                row['density'] = -math.log10(average_distance(points.iloc[nearest], index))
 
             p = points.copy()
 
@@ -125,8 +126,10 @@ def average_distance(points, index):
 
 def sphere_display(npoints, ndim=3, animate=True, abs_color=True, density_color=False, frac=8, cmap='cool', alpha=1.0,
                    savepath=''):
-    points = pd.DataFrame(hypersphere_sample(npoints, ndim))
-    # points = pd.DataFrame(hypersphere_sample_2(npoints, ndim))
+    start = time.time()
+    # first sampling normalized a uniform cube, second tries its best
+    # points = pd.DataFrame(hypersphere_sample(npoints, ndim))
+    points = pd.DataFrame(hypersphere_sample_2(npoints, ndim))
     assert (len(points.columns) >= 3)
     plt.style.use('dark_background')
     fig = plt.figure()
@@ -172,6 +175,8 @@ def sphere_display(npoints, ndim=3, animate=True, abs_color=True, density_color=
         graph._offsets3d = (points[0], points[1], z)
         title.set_text('Test: Drop {}-Sphere at t={}'.format(ndim, num))
 
+    end = time.time()
+    print(end - start)
     if animate:
         ani = matplotlib.animation.FuncAnimation(fig, sphere_anim_fall, 25, interval=40, blit=False)
     if savepath == '':
@@ -194,4 +199,4 @@ def random_circle_test(vec, draw_points=False):
 if __name__ == "__main__":
     num = 1000
     dim = 3
-    sphere_display(num, dim, density_color=True, cmap='binary')
+    sphere_display(num, dim, density_color=True)

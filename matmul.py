@@ -4,17 +4,19 @@ from mpl_toolkits.mplot3d import Axes3D
 import matplotlib.animation as animation
 
 
-t = np.array([[2, 0, 0],
-              [0, 0.5, 0],
-              [0, 0, 2]])
-b = np.array([[1, 1, 0],
-              [0, 1, 1],
-              [1, 0, 1]])
-
-lim = 3
+t = np.array([[3, 1, 0],
+              [0, 0.25, 1],
+              [1, 0, 0]])
+b = np.array([[1, 0, 0],
+              [0, 1, 0],
+              [0, 0, 1]])
+b_t = b @ t
+lim = max(np.linalg.norm(b),
+          np.linalg.norm(b_t))
 scales = [min(lim / np.abs(b[:, i] + 0.00001)) for i in range(3)]
 cols = ['red', 'green', 'blue']
-max_frame = 240
+max_frame = 360
+tpl = 2
 turn = True
 
 fig = plt.figure()
@@ -25,10 +27,13 @@ ax.w_zaxis.set_pane_color((0, 0, 1, 0.1))
 ax.set_xlim(-lim, lim)
 ax.set_ylim(-lim, lim)
 ax.set_zlim(-lim, lim)
-ax.grid(False)
-ax.set_xticks([])
-ax.set_yticks([])
-ax.set_zticks([])
+# ax.grid(False)
+ax.set_xticks([0])
+ax.set_yticks([0])
+ax.set_zticks([0])
+ax.xaxis._axinfo['grid']['linestyle'] = 'dashed'
+ax.yaxis._axinfo['grid']['linestyle'] = 'dashed'
+ax.zaxis._axinfo['grid']['linestyle'] = 'dashed'
 
 lines = []
 
@@ -65,20 +70,20 @@ def init():
                         b[:, j, np.newaxis] +
                         b[:, i, np.newaxis]))
         lines.append(ax.plot(st[0],
-                            st[1],
-                            st[2],
-                            ls='dashed',
-                            alpha=0.5,
+                             st[1],
+                             st[2],
+                             ls='dashed',
+                             alpha=0.5,
                             c=cols[i])[0])
         st = np.hstack((b[:, k, np.newaxis],
                         b[:, k, np.newaxis] +
                         b[:, i, np.newaxis]))
         lines.append(ax.plot(st[0],
-                            st[1],
-                            st[2],
-                            ls='dashed',
-                            alpha=0.5,
-                            c=cols[i])[0])
+                             st[1],
+                             st[2],
+                             ls='dashed',
+                             alpha=0.5,
+                             c=cols[i])[0])
         st = np.hstack((b[:, j, np.newaxis] +
                         b[:, k, np.newaxis],
                         b[:, j, np.newaxis] +
@@ -95,12 +100,13 @@ def init():
 def update(num):
     global lines
     global turn
-    if num == max_frame / 2 or num == max_frame - 1:
+    ax.view_init(azim=num)
+    if num != 0 and (num % (max_frame / tpl) == 0 or num == max_frame - 1):
         turn = not turn
     if turn:
-        t_ = (t - np.diag([1, 1, 1])) * num / (max_frame / 2) + np.diag([1, 1, 1])
+        t_ = (t - np.diag([1, 1, 1])) * (num % (max_frame / tpl)) / (max_frame / tpl) + np.diag([1, 1, 1])
     else:
-        t_ = (t - np.diag([1, 1, 1])) * (max_frame - num) / (max_frame / 2) + np.diag([1, 1, 1])
+        t_ = (t - np.diag([1, 1, 1])) * ((max_frame - num)% (max_frame / tpl)) / (max_frame / tpl) + np.diag([1, 1, 1])
     b_ = b @ t_
     scales = [min(lim / np.abs(b_[:, i] + 0.00001)) for i in range(3)]
     for idx in range(6, 9):
@@ -144,5 +150,6 @@ def update(num):
     return lines
 
 ani = animation.FuncAnimation(fig, update, init_func=init, frames=max_frame, interval=5, blit=True)
-plt.grid(b=None)
-plt.show()
+ani.save('ani.mp4', writer=animation.writers['ffmpeg'](fps=60, bitrate=1800), dpi=300)
+
+# plt.show()
